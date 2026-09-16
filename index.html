@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matachana Tag Decoder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; }
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  :root {
+    --ground: #eef2f1;
+    --card: #ffffff;
+    --card-2: #f6f9f8;
+    --ink: #0e1a1c;
+    --muted: #5a6b6e;
+    --line: #d2dcda;
+    --accent: #0d6f69;
+    --accent-soft: #daeceb;
+    --ok: #17704a;
+    --ok-soft: #dcf0e4;
+    --warn: #8a5606;
+    --warn-soft: #f8ead2;
+    --bad: #a72f24;
+    --bad-soft: #f8dedb;
+    --field-type: #0d6f69;
+    --field-date: #2f5ea8;
+    --field-batch: #8a5606;
+    --field-sig: #6b5bb0;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0c1214;
+      --card: #141d1f;
+      --card-2: #1a2427;
+      --ink: #e3ecec;
+      --muted: #93a5a6;
+      --line: #273436;
+      --accent: #52c9bf;
+      --accent-soft: #10312f;
+      --ok: #55c98d;
+      --ok-soft: #102d20;
+      --warn: #e0a942;
+      --warn-soft: #33260e;
+      --bad: #ff8172;
+      --bad-soft: #391a17;
+      --field-type: #52c9bf;
+      --field-date: #7aa7f0;
+      --field-batch: #e0a942;
+      --field-sig: #a99af0;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c1214;
+    --card: #141d1f;
+    --card-2: #1a2427;
+    --ink: #e3ecec;
+    --muted: #93a5a6;
+    --line: #273436;
+    --accent: #52c9bf;
+    --accent-soft: #10312f;
+    --ok: #55c98d;
+    --ok-soft: #102d20;
+    --warn: #e0a942;
+    --warn-soft: #33260e;
+    --bad: #ff8172;
+    --bad-soft: #391a17;
+    --field-type: #52c9bf;
+    --field-date: #7aa7f0;
+    --field-batch: #e0a942;
+    --field-sig: #a99af0;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding-inline: 18px;
+    padding-block: 28px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--muted); max-width: 56ch; }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .panel-title {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  textarea {
+    width: 100%;
+    min-height: 168px;
+    resize: vertical;
+    background: var(--card-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 12px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    tab-size: 2;
+  }
+  textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* result */
+  .result { padding: 0; overflow: hidden; }
+  .result-top {
+    padding: 18px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .product {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .product-code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 999px;
+    padding: 5px 13px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .pill::before {
+    content: "";
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .pill.ok { color: var(--ok); background: var(--ok-soft); }
+  .pill.warn { color: var(--warn); background: var(--warn-soft); }
+  .pill.bad { color: var(--bad); background: var(--bad-soft); }
+  .fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  .field {
+    background: var(--card);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .field-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .field-value {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 17px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    word-break: break-all;
+  }
+  .note {
+    padding: 11px 16px;
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--card-2);
+    border-top: 1px solid var(--line);
+  }
+  .error-card {
+    border-color: var(--bad);
+    background: var(--bad-soft);
+    color: var(--bad);
+    font-weight: 500;
+  }
+  .error-card .hint { color: var(--ink); font-weight: 400; font-size: 13px; }
+
+  /* byte map */
+  .map-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  td { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  td.idx { color: var(--muted); }
+  tr.dim td { opacity: 0.45; }
+  .seg-type { color: var(--field-type); }
+  .seg-date { color: var(--field-date); }
+  .seg-batch { color: var(--field-batch); }
+  .seg-sig { color: var(--field-sig); }
+  .seg-none { color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+  .legend span::before {
+    content: "■ ";
+    font-size: 11px;
+  }
+  .legend .seg-type, .legend .seg-date, .legend .seg-batch, .legend .seg-sig { color: var(--muted); }
+  .legend .seg-type::before { color: var(--field-type); }
+  .legend .seg-date::before { color: var(--field-date); }
+  .legend .seg-batch::before { color: var(--field-batch); }
+  .legend .seg-sig::before { color: var(--field-sig); }
+
+  details { border-top: 1px solid var(--line); padding-top: 14px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details .body { color: var(--muted); font-size: 13.5px; }
+  details .body ol { padding-left: 20px; margin: 10px 0 0; }
+  details .body li { margin-bottom: 6px; }
+  details .body code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .layout-strip {
+    display: flex;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .layout-strip div {
+    padding: 7px 4px;
+    text-align: center;
+    color: var(--card);
+    white-space: nowrap;
+  }
+  .ls-type { background: var(--field-type); flex: 4; }
+  .ls-date { background: var(--field-date); flex: 8; }
+  .ls-batch { background: var(--field-batch); flex: 20; }
+  footer { color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 460px) {
+    .fields { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">ISO 15693 · NFC-V</div>
+    <h1>ถอดรหัสแท็ก Matachana</h1>
+    <p class="lede">วาง memory dump ที่อ่านได้จากแอปอย่าง NFC TagInfo แล้วหน้านี้จะแปลง 32 ไบต์แรกเป็นชนิดผลิตภัณฑ์ วันหมดอายุ และเลข BATCH ตามรูปแบบเดียวกับแอป Matachana TAG reader</p>
+  </header>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Memory dump</span>
+      <span class="panel-title" id="byteCount">—</span>
+    </div>
+    <textarea id="dumpInput" spellcheck="false" aria-label="Memory dump"></textarea>
+    <div class="row">
+      <button type="button" id="btnPaste">วางจากคลิปบอร์ด</button>
+      <button type="button" id="btnSample">ใส่ตัวอย่าง</button>
+      <button type="button" id="btnClear">ล้าง</button>
+    </div>
+  </section>
+
+  <section id="output"></section>
+
+  <section class="panel">
+    <div class="panel-head"><span class="panel-title">Byte map</span></div>
+    <div class="legend">
+      <span class="seg-type">ชนิด (ไบต์ 0–3)</span>
+      <span class="seg-date">วันหมดอายุ (4–11)</span>
+      <span class="seg-batch">BATCH (12–31)</span>
+      <span class="seg-sig">ลายเซ็นประจำแท็ก (32–63)</span>
+    </div>
+    <div class="map-scroll">
+      <table>
+        <thead>
+          <tr><th>Block</th><th>Hex</th><th>ASCII</th><th>Field</th></tr>
+        </thead>
+        <tbody id="mapBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details>
+    <summary>อ่าน dump มาจากไหน</summary>
+    <div class="body">
+      <ol>
+        <li>เปิดแอปอ่าน NFC บน iPhone เช่น NFC TagInfo ของ NXP แล้วแตะแท็ก</li>
+        <li>เปิดหน้าที่แสดงเนื้อหาหน่วยความจำ (Memory content / Full scan)</li>
+        <li>คัดลอกข้อความทั้งหมดมาวางในช่องด้านบน รูปแบบไหนก็ได้ เช่น <code>00: 4C 46 4D 4D</code> หรือเลขฐานสิบหกติดกันยาว ๆ</li>
+      </ol>
+      <p>บรรทัดที่มีคำว่า UID หรือ serial จะถูกข้ามอัตโนมัติ เพราะไม่ใช่เนื้อหาในหน่วยความจำ ถ้า dump เริ่มไม่ตรง block 0 หน้านี้จะไล่หารหัสชนิดผลิตภัณฑ์ให้เอง</p>
+      <div class="layout-strip">
+        <div class="ls-type">TYPE 4</div>
+        <div class="ls-date">YYYYMMDD 8</div>
+        <div class="ls-batch">BATCH 20 หลัก</div>
+      </div>
+    </div>
+  </details>
+
+  <footer>รหัสชนิด: HPOM = BluKat® 180ml · HPO2 = BluKat® 29ml · LFMM = e-bag® · SRVC = Technical Service — ข้อมูลตัวอย่างเป็นข้อมูลสมมติ ไม่ได้มาจากแท็กจริง</footer>
+</div>
+
+<script>
+(function () {
+  var SAMPLE = [
+    "UID: E0 04 01 00 12 34 56 78",
+    "00: 48 50 4F 4D", "01: 32 30 32 37", "02: 30 32 32 38", "03: 30 30 30 30",
+    "04: 30 30 30 30", "05: 30 30 30 30", "06: 31 32 33 34", "07: 35 36 37 38",
+    "08: 30 31 32 33", "09: 34 35 36 37", "10: 38 39 41 42", "11: 43 44 45 46",
+    "12: 30 31 32 33", "13: 34 35 36 37", "14: 38 39 41 42", "15: 43 44 45 46",
+    "16: 00 00 00 00", "17: 00 00 00 00", "18: 00 00 00 00", "19: 00 00 00 00",
+    "20: 00 00 00 00", "21: 00 00 00 00", "22: 00 00 00 00", "23: 00 00 00 00",
+    "24: 00 00 00 00", "25: 00 00 00 00", "26: 00 00 00 00", "27: 00 00 00 00"
+  ].join("\n");
+
+  var PRODUCTS = {
+    HPOM: "BluKat® 180ml",
+    HPO2: "BluKat® 29ml",
+    LFMM: "e-bag®",
+    SRVC: "Technical Service"
+  };
+  var WARN_WITHIN_DAYS = 30;
+
+  var input = document.getElementById("dumpInput");
+  var output = document.getElementById("output");
+  var mapBody = document.getElementById("mapBody");
+  var byteCount = document.getElementById("byteCount");
+
+  function isHex(s) { return /^[0-9a-fA-F]+$/.test(s); }
+
+  // Pulls bytes out of whatever the reader app copied: "00: 4C 46 4D 4D",
+  // "Block 3  30303030  0000", or one long hex string.
+  function parseDump(text) {
+    var bytes = [], uid = null;
+    text.split(/\r?\n/).forEach(function (line) {
+      var body = line.trim();
+      if (!body) return;
+      var uidMatch = body.match(/\b(?:uid|serial(?:\s*number)?|tag\s*id|identifier)\b\s*[:=]?\s*([0-9a-fA-F][0-9a-fA-F\s:.-]*)/i);
+      if (uidMatch) {
+        if (!uid) uid = (uidMatch[1].replace(/[^0-9a-fA-F]/g, "").match(/../g) || []).join(":").toUpperCase();
+        return;
+      }
+      // drop a leading block label: "05:", "Block 5 -", "page 0c |"
+      body = body.replace(/^\s*(?:block|blk|page|addr)\s*[0-9a-fA-F]{1,3}\s*[:.|-]?\s+/i, "")
+                 .replace(/^\s*[0-9a-fA-F]{1,3}\s*[:.|-]\s+/, "");
+      var tokens = body.split(/[\s,|]+/);
+      var lineBytes = [], started = false;
+      for (var i = 0; i < tokens.length; i++) {
+        var t = tokens[i].replace(/[:.-]/g, "");
+        if (!t) continue;
+        if (!isHex(t) || t.length % 2 !== 0) {
+          if (started) break; // the ASCII column starts here
+          continue;           // still in a label like "Data:"
+        }
+        started = true;
+        for (var j = 0; j < t.length; j += 2) lineBytes.push(parseInt(t.substr(j, 2), 16));
+      }
+      // a real dump line carries at least one 4-byte block; "AFI: 00" does not
+      if (lineBytes.length >= 4) bytes = bytes.concat(lineBytes);
+    });
+    return { bytes: bytes, uid: uid };
+  }
+
+  function ascii(bytes) {
+    return bytes.map(function (b) {
+      return b >= 32 && b <= 126 ? String.fromCharCode(b) : ".";
+    }).join("");
+  }
+
+  function fieldOf(offset) {
+    if (offset < 4) return "type";
+    if (offset < 12) return "date";
+    if (offset < 32) return "batch";
+    if (offset < 64) return "sig";
+    return "none";
+  }
+
+  var FIELD_NAME = { type: "ชนิด", date: "วันหมดอายุ", batch: "BATCH", sig: "ลายเซ็น", none: "—" };
+
+  function findPayloadStart(bytes) {
+    for (var start = 0; start + 32 <= bytes.length; start += 4) {
+      if (PRODUCTS[ascii(bytes.slice(start, start + 4))]) return start;
+    }
+    return bytes.length >= 32 ? 0 : -1;
+  }
+
+  function decode(bytes) {
+    var start = findPayloadStart(bytes);
+    if (start < 0) {
+      return { error: "อ่านได้เพียง " + bytes.length + " ไบต์ ต้องมีอย่างน้อย 32 ไบต์ (block 0 ถึง 7)" };
+    }
+    var text = ascii(bytes.slice(start, start + 32));
+    var code = text.slice(0, 4);
+    var product = PRODUCTS[code];
+    if (!product) {
+      return { error: "Not valid tag — รหัสชนิดคือ “" + code + "” ซึ่งไม่ใช่ HPOM, HPO2, LFMM หรือ SRVC", start: start };
+    }
+    var year = parseInt(text.slice(4, 8), 10);
+    var month = parseInt(text.slice(8, 10), 10);
+    var day = parseInt(text.slice(10, 12), 10);
+    var dateError = null;
+    if (!(year > 2011 && year < 3000)) dateError = "Invalid year";
+    else if (!(month > 0 && month < 13)) dateError = "Invalid month";
+    else if (!(day > 0 && day < 32)) dateError = "Invalid day";
+
+    var batchRaw = text.slice(12, 32);
+    var batch = batchRaw.replace(/^0+/, "");
+    if (!batch) batch = "0";
+
+    return {
+      start: start,
+      code: code,
+      product: product,
+      dateError: dateError,
+      date: dateError ? text.slice(4, 12) : pad(day) + "/" + pad(month) + "/" + year,
+      expiry: dateError ? null : new Date(year, month - 1, day),
+      batch: batch
+    };
+  }
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function daysUntil(date) {
+    var now = new Date();
+    var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    var target = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    return Math.round((target - today) / 86400000);
+  }
+
+  function statusFor(expiry) {
+    if (!expiry) return { cls: "warn", text: "วันที่ไม่ถูกต้อง" };
+    var d = daysUntil(expiry);
+    if (d < 0) return { cls: "bad", text: "หมดอายุแล้ว " + Math.abs(d) + " วัน" };
+    if (d === 0) return { cls: "warn", text: "หมดอายุวันนี้" };
+    if (d <= WARN_WITHIN_DAYS) return { cls: "warn", text: "เหลืออีก " + d + " วัน" };
+    return { cls: "ok", text: "เหลืออีก " + d + " วัน" };
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function renderResult(res, uid) {
+    output.textContent = "";
+    if (res.error) {
+      var err = el("div", "panel error-card");
+      err.appendChild(el("div", null, res.error));
+      err.appendChild(el("div", "hint", "ตรวจว่าคัดลอกเนื้อหาหน่วยความจำมาครบ ไม่ใช่เฉพาะบรรทัด UID หรือข้อมูลชิป"));
+      output.appendChild(err);
+      return;
+    }
+    var card = el("section", "panel result");
+    var top = el("div", "result-top");
+    top.appendChild(el("div", "product", res.product));
+    top.appendChild(el("div", "product-code", res.code));
+    var st = statusFor(res.expiry);
+    top.appendChild(el("div", "pill " + st.cls, st.text));
+    card.appendChild(top);
+
+    var fields = el("div", "fields");
+    [["วันหมดอายุ", res.dateError ? res.date + " (" + res.dateError + ")" : res.date],
+     ["BATCH", res.batch]].forEach(function (pair) {
+      var f = el("div", "field");
+      f.appendChild(el("div", "field-label", pair[0]));
+      f.appendChild(el("div", "field-value", pair[1]));
+      fields.appendChild(f);
+    });
+    card.appendChild(fields);
+
+    var notes = [];
+    if (uid) notes.push("UID " + uid);
+    if (res.start > 0) notes.push("ข้อมูลเริ่มที่ไบต์ที่ " + res.start + " ของ dump (block " + (res.start / 4) + ")");
+    if (notes.length) card.appendChild(el("div", "note", notes.join(" · ")));
+    output.appendChild(card);
+  }
+
+  function renderMap(bytes, start) {
+    mapBody.textContent = "";
+    var offsetBase = start || 0;
+    for (var i = 0; i < bytes.length; i += 4) {
+      var chunk = bytes.slice(i, i + 4);
+      if (!chunk.length) break;
+      var rel = i - offsetBase;
+      var field = rel >= 0 ? fieldOf(rel) : "none";
+      var tr = el("tr");
+      var erased = chunk.every(function (b) { return b === 0; });
+      if (erased || field === "none") tr.className = "dim";
+      tr.appendChild(el("td", "idx", pad(i / 4)));
+      tr.appendChild(el("td", "seg-" + field, chunk.map(function (b) {
+        return (b < 16 ? "0" : "") + b.toString(16).toUpperCase();
+      }).join(" ")));
+      tr.appendChild(el("td", "seg-" + field, ascii(chunk)));
+      tr.appendChild(el("td", "seg-none", erased ? "ว่าง" : FIELD_NAME[field]));
+      mapBody.appendChild(tr);
+    }
+    if (!mapBody.children.length) {
+      var tr2 = el("tr");
+      var td = el("td", "seg-none", "ยังไม่มีข้อมูล");
+      td.colSpan = 4;
+      tr2.appendChild(td);
+      mapBody.appendChild(tr2);
+    }
+  }
+
+  function run() {
+    var parsed = parseDump(input.value);
+    byteCount.textContent = parsed.bytes.length ? parsed.bytes.length + " ไบต์ · " + Math.ceil(parsed.bytes.length / 4) + " block" : "—";
+    if (!parsed.bytes.length) {
+      output.textContent = "";
+      var empty = el("section", "panel");
+      empty.appendChild(el("div", "panel-title", "ผลการถอดรหัส"));
+      empty.appendChild(el("div", null, "วาง memory dump ด้านบน แล้วผลจะขึ้นที่นี่ทันที"));
+      output.appendChild(empty);
+      renderMap([], 0);
+      try { localStorage.removeItem("matachana-dump-v2"); } catch (e) {}
+      return;
+    }
+    var res = decode(parsed.bytes);
+    renderResult(res, parsed.uid);
+    renderMap(parsed.bytes, res.start || 0);
+    try { localStorage.setItem("matachana-dump-v2", input.value); } catch (e) {}
+  }
+
+  document.getElementById("btnSample").addEventListener("click", function () {
+    input.value = SAMPLE;
+    run();
+  });
+  document.getElementById("btnClear").addEventListener("click", function () {
+    input.value = "";
+    run();
+    input.focus();
+  });
+  document.getElementById("btnPaste").addEventListener("click", function () {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      alert("เบราว์เซอร์นี้ไม่อนุญาตให้อ่านคลิปบอร์ด ใช้การวางด้วยมือแทน");
+      return;
+    }
+    navigator.clipboard.readText().then(function (t) {
+      input.value = t;
+      run();
+    }, function () {
+      alert("อ่านคลิปบอร์ดไม่สำเร็จ ใช้การวางด้วยมือแทน");
+    });
+  });
+  input.addEventListener("input", run);
+
+  var saved = null;
+  try { saved = localStorage.getItem("matachana-dump-v2"); } catch (e) {}
+  input.value = saved || SAMPLE;
+  run();
+})();
+</script>
+</body>
+</html>
