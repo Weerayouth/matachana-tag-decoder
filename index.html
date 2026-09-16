@@ -369,7 +369,9 @@
     <p class="progress-note" id="progressNote"></p>
     <textarea id="dumpInput" spellcheck="false" aria-label="Memory dump"></textarea>
     <div class="row">
-      <button type="button" class="primary" id="btnAppend">วางต่อท้าย</button>
+      <button type="button" class="primary" id="btnFile">เปิดไฟล์จาก TagInfo</button>
+      <input type="file" id="fileInput" accept=".txt,.xml,text/plain,text/xml,application/xml" hidden>
+      <button type="button" id="btnAppend">วางต่อท้าย</button>
       <button type="button" id="btnPaste">วางแทนทั้งหมด</button>
       <button type="button" id="btnSample">ใส่ตัวอย่าง</button>
       <button type="button" id="btnClear">ล้าง</button>
@@ -400,12 +402,11 @@
     <summary>วิธีอ่านด้วย NFC TagInfo</summary>
     <div class="body">
       <ol>
-        <li>เปิด NFC TagInfo แล้ว<strong>แนบโทรศัพท์กับแท็กนิ่ง ๆ จนสแกนเสร็จ</strong> ถ้าเอาออกเร็ว หัวข้อ Memory content จะไม่ขึ้น</li>
-        <li>เปิดหัวข้อ Memory content</li>
-        <li>คัดลอก block 00 แล้วกลับมากด <strong>วางต่อท้าย</strong> ทำซ้ำจนครบ block 07 ใช้แค่ 8 block แรกเท่านั้น</li>
-        <li>ถ้าแอปมีปุ่มแชร์หรือส่งออกผลสแกน คัดลอกทั้งหมดมาวางทีเดียวด้วย <strong>วางแทนทั้งหมด</strong> ได้เลย</li>
+        <li>เปิด NFC TagInfo แล้ว<strong>แนบโทรศัพท์กับแท็กนิ่ง ๆ จนสแกนเสร็จ</strong> ถ้าเอาออกเร็ว หัวข้อ Memory Content จะไม่ขึ้น</li>
+        <li>บันทึกหรือแชร์ผลสแกนเป็นไฟล์ (ได้ไฟล์ <code>…_taginfo_scan.txt</code> หรือ <code>.xml</code>) บน iPhone ให้เลือกบันทึกลงแอป Files</li>
+        <li>กด <strong>เปิดไฟล์จาก TagInfo</strong> แล้วเลือกไฟล์นั้น ผลจะขึ้นทันที</li>
       </ol>
-      <p>อ่านรูปแบบได้หลายแบบ เช่น <code>[00] 48 50 4F 4D |HPOM|</code>, <code>00: 48 50 4F 4D</code> หรือเลขฐานสิบหกติดกัน ถ้าบรรทัดมีเลข block กำกับ จะวางตามลำดับไหนก็ได้ ถ้าไม่มีเลข block จะเรียงตามลำดับที่วาง บรรทัด UID และ serial จะถูกข้าม</p>
+      <p>ถ้าบันทึกไฟล์ไม่ได้ ให้คัดลอกบรรทัด <code>[00]</code> ถึง <code>[07]</code> จากหัวข้อ Memory Content มาวางทีละบรรทัดด้วย <strong>วางต่อท้าย</strong> วางสลับลำดับได้ เพราะมีเลข block กำกับ บรรทัด ID, UID, AFI และข้อมูลชิปอื่น ๆ จะถูกข้าม</p>
       <div class="layout-strip">
         <div class="ls-type">TYPE 4</div>
         <div class="ls-date">YYYYMMDD 8</div>
@@ -449,7 +450,8 @@
 
   function isHex(s) { return /^[0-9a-fA-F]+$/.test(s); }
 
-  var UID_LINE = /\b(?:uid|serial(?:\s*number)?|tag\s*id|identifier)\b\s*[:=]?\s*([0-9a-fA-F][0-9a-fA-F\s:.-]*)/i;
+  // "UID: …", "Serial number …", and TagInfo's "ID: E0:04:…" (the colon is required for bare "ID")
+  var UID_LINE = /\b(?:uid|serial(?:\s*number)?|tag\s*id|identifier)\b\s*[:=]?\s*([0-9a-fA-F][0-9a-fA-F\s:.-]*)|\bid\s*:\s*([0-9a-fA-F]{2}(?:[:\s-]?[0-9a-fA-F]{2}){3,})/i;
   // "[00]", "[0x0A]", "Block 3:", "blk #3", "00:" (the last needs a space after it,
   // so a colon-separated byte run like "4C:46:4D:4D" is not mistaken for a label)
   var BLOCK_LABEL = /^\s*(?:\[\s*(0x)?([0-9a-fA-F]{1,3})\s*\]|(?:block|blk|page|addr)\s*#?\s*(0x)?([0-9a-fA-F]{1,3})\b\s*[:.|-]?|(0x)?([0-9a-fA-F]{1,3})\s*[:.|-](?=\s))\s*/i;
@@ -473,14 +475,37 @@
     return bytes;
   }
 
+  function formatUid(raw) {
+    return (raw.replace(/[^0-9a-fA-F]/g, "").match(/../g) || []).join(":").toUpperCase();
+  }
+
+  // TagInfo's XML export: <address>N</address><data access=".">xx xx xx xx</data>
+  function parseTagInfoXml(text) {
+    var blocks = [], re = /<address>\s*(\d+)\s*<\/address>\s*<data[^>]*>([^<]*)<\/data>/gi, m;
+    while ((m = re.exec(text))) {
+      var bytes = lineBytes(m[2]);
+      if (bytes.length >= 4) blocks[parseInt(m[1], 10)] = bytes.slice(0, 4);
+    }
+    var uid = null, id = text.match(/\bID:\s*([0-9A-Fa-f:]{23})/);
+    if (id) {
+      uid = formatUid(id[1]);
+    } else {
+      // <uid> is stored least-significant byte first
+      var u = text.match(/<uid[^>]*>([^<]+)<\/uid>/i);
+      if (u) uid = formatUid(u[1]).split(":").reverse().join(":");
+    }
+    return { blocks: blocks, uid: uid };
+  }
+
   // Returns a sparse array of 4-byte blocks keyed by block number.
   function parseDump(text) {
+    if (/<address>/i.test(text) && /<data\b/i.test(text)) return parseTagInfoXml(text);
     var uid = null, rows = [], anyHexLabel = false;
     text.split(/\r?\n/).forEach(function (line) {
       if (!line.trim()) return;
       var u = line.match(UID_LINE);
       if (u) {
-        if (!uid) uid = (u[1].replace(/[^0-9a-fA-F]/g, "").match(/../g) || []).join(":").toUpperCase();
+        if (!uid) uid = formatUid(u[1] || u[2]);
         return;
       }
       var label = null, body = line;
@@ -725,6 +750,26 @@
       alert("อ่านคลิปบอร์ดไม่สำเร็จ กดค้างในช่องด้านบนแล้วเลือกวางแทน");
     });
   }
+
+  var fileInput = document.getElementById("fileInput");
+  document.getElementById("btnFile").addEventListener("click", function () {
+    fileInput.value = "";
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      input.value = String(reader.result);
+      input.scrollTop = 0;
+      run();
+    };
+    reader.onerror = function () {
+      alert("เปิดไฟล์ " + file.name + " ไม่สำเร็จ ลองบันทึกผลสแกนจาก TagInfo ใหม่อีกครั้ง");
+    };
+    reader.readAsText(file);
+  });
 
   document.getElementById("btnAppend").addEventListener("click", function () {
     readClipboard(function (t) {
