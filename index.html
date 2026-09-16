@@ -320,6 +320,35 @@
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }
+  .blocks {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .blk {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    text-align: center;
+    padding: 6px 0;
+    border-radius: 5px;
+    border: 1px dashed var(--line);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .blk.have {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid transparent;
+    font-weight: 600;
+  }
+  .progress-note { font-size: 13px; color: var(--muted); margin: 0; }
+  .progress-note strong { color: var(--ink); font-weight: 600; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--card);
+  }
+  button.primary:hover { color: var(--card); filter: brightness(1.1); }
 </style>
 </head>
 <body>
@@ -328,7 +357,7 @@
   <header class="masthead">
     <div class="eyebrow">ISO 15693 · NFC-V</div>
     <h1>ถอดรหัสแท็ก Matachana</h1>
-    <p class="lede">วาง memory dump ที่อ่านได้จากแอปอย่าง NFC TagInfo แล้วหน้านี้จะแปลง 32 ไบต์แรกเป็นชนิดผลิตภัณฑ์ วันหมดอายุ และเลข BATCH ตามรูปแบบเดียวกับแอป Matachana TAG reader</p>
+    <p class="lede">วาง memory dump จากแอปอย่าง NFC TagInfo ทีละ block หรือทั้งหมดทีเดียวก็ได้ หน้านี้จะแปลง block 00–07 เป็นชนิดผลิตภัณฑ์ วันหมดอายุ และเลข BATCH ตามรูปแบบเดียวกับแอป Matachana TAG reader</p>
   </header>
 
   <section class="panel">
@@ -336,9 +365,12 @@
       <span class="panel-title">Memory dump</span>
       <span class="panel-title" id="byteCount">—</span>
     </div>
+    <div class="blocks" id="blockCells" aria-label="block ที่วางแล้ว"></div>
+    <p class="progress-note" id="progressNote"></p>
     <textarea id="dumpInput" spellcheck="false" aria-label="Memory dump"></textarea>
     <div class="row">
-      <button type="button" id="btnPaste">วางจากคลิปบอร์ด</button>
+      <button type="button" class="primary" id="btnAppend">วางต่อท้าย</button>
+      <button type="button" id="btnPaste">วางแทนทั้งหมด</button>
       <button type="button" id="btnSample">ใส่ตัวอย่าง</button>
       <button type="button" id="btnClear">ล้าง</button>
     </div>
@@ -364,15 +396,16 @@
     </div>
   </section>
 
-  <details>
-    <summary>อ่าน dump มาจากไหน</summary>
+  <details open>
+    <summary>วิธีอ่านด้วย NFC TagInfo</summary>
     <div class="body">
       <ol>
-        <li>เปิดแอปอ่าน NFC บน iPhone เช่น NFC TagInfo ของ NXP แล้วแตะแท็ก</li>
-        <li>เปิดหน้าที่แสดงเนื้อหาหน่วยความจำ (Memory content / Full scan)</li>
-        <li>คัดลอกข้อความทั้งหมดมาวางในช่องด้านบน รูปแบบไหนก็ได้ เช่น <code>00: 4C 46 4D 4D</code> หรือเลขฐานสิบหกติดกันยาว ๆ</li>
+        <li>เปิด NFC TagInfo แล้ว<strong>แนบโทรศัพท์กับแท็กนิ่ง ๆ จนสแกนเสร็จ</strong> ถ้าเอาออกเร็ว หัวข้อ Memory content จะไม่ขึ้น</li>
+        <li>เปิดหัวข้อ Memory content</li>
+        <li>คัดลอก block 00 แล้วกลับมากด <strong>วางต่อท้าย</strong> ทำซ้ำจนครบ block 07 ใช้แค่ 8 block แรกเท่านั้น</li>
+        <li>ถ้าแอปมีปุ่มแชร์หรือส่งออกผลสแกน คัดลอกทั้งหมดมาวางทีเดียวด้วย <strong>วางแทนทั้งหมด</strong> ได้เลย</li>
       </ol>
-      <p>บรรทัดที่มีคำว่า UID หรือ serial จะถูกข้ามอัตโนมัติ เพราะไม่ใช่เนื้อหาในหน่วยความจำ ถ้า dump เริ่มไม่ตรง block 0 หน้านี้จะไล่หารหัสชนิดผลิตภัณฑ์ให้เอง</p>
+      <p>อ่านรูปแบบได้หลายแบบ เช่น <code>[00] 48 50 4F 4D |HPOM|</code>, <code>00: 48 50 4F 4D</code> หรือเลขฐานสิบหกติดกัน ถ้าบรรทัดมีเลข block กำกับ จะวางตามลำดับไหนก็ได้ ถ้าไม่มีเลข block จะเรียงตามลำดับที่วาง บรรทัด UID และ serial จะถูกข้าม</p>
       <div class="layout-strip">
         <div class="ls-type">TYPE 4</div>
         <div class="ls-date">YYYYMMDD 8</div>
@@ -403,46 +436,84 @@
     LFMM: "e-bag®",
     SRVC: "Technical Service"
   };
+  var PAYLOAD_BLOCKS = 8;
   var WARN_WITHIN_DAYS = 30;
+  var STORAGE_KEY = "matachana-dump-v2";
 
   var input = document.getElementById("dumpInput");
   var output = document.getElementById("output");
   var mapBody = document.getElementById("mapBody");
   var byteCount = document.getElementById("byteCount");
+  var blockCells = document.getElementById("blockCells");
+  var progressNote = document.getElementById("progressNote");
 
   function isHex(s) { return /^[0-9a-fA-F]+$/.test(s); }
 
-  // Pulls bytes out of whatever the reader app copied: "00: 4C 46 4D 4D",
-  // "Block 3  30303030  0000", or one long hex string.
+  var UID_LINE = /\b(?:uid|serial(?:\s*number)?|tag\s*id|identifier)\b\s*[:=]?\s*([0-9a-fA-F][0-9a-fA-F\s:.-]*)/i;
+  // "[00]", "[0x0A]", "Block 3:", "blk #3", "00:" (the last needs a space after it,
+  // so a colon-separated byte run like "4C:46:4D:4D" is not mistaken for a label)
+  var BLOCK_LABEL = /^\s*(?:\[\s*(0x)?([0-9a-fA-F]{1,3})\s*\]|(?:block|blk|page|addr)\s*#?\s*(0x)?([0-9a-fA-F]{1,3})\b\s*[:.|-]?|(0x)?([0-9a-fA-F]{1,3})\s*[:.|-](?=\s))\s*/i;
+
+  // Reads bytes from one line, stopping where an ASCII column starts.
+  function lineBytes(body) {
+    var bytes = [], width = 0, started = false;
+    var tokens = body.split(/[\s,|]+/);
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i].replace(/^0x/i, "").replace(/[:.-]/g, "");
+      if (!t) continue;
+      var ok = isHex(t) && t.length % 2 === 0 && (!width || t.length === width);
+      if (!ok) {
+        if (started) break;  // "|HPOM|" or "|2027|" after the hex bytes
+        continue;            // still inside a label such as "Data:" or "+r"
+      }
+      if (!width) width = t.length;
+      started = true;
+      for (var j = 0; j < t.length; j += 2) bytes.push(parseInt(t.substr(j, 2), 16));
+    }
+    return bytes;
+  }
+
+  // Returns a sparse array of 4-byte blocks keyed by block number.
   function parseDump(text) {
-    var bytes = [], uid = null;
+    var uid = null, rows = [], anyHexLabel = false;
     text.split(/\r?\n/).forEach(function (line) {
-      var body = line.trim();
-      if (!body) return;
-      var uidMatch = body.match(/\b(?:uid|serial(?:\s*number)?|tag\s*id|identifier)\b\s*[:=]?\s*([0-9a-fA-F][0-9a-fA-F\s:.-]*)/i);
-      if (uidMatch) {
-        if (!uid) uid = (uidMatch[1].replace(/[^0-9a-fA-F]/g, "").match(/../g) || []).join(":").toUpperCase();
+      if (!line.trim()) return;
+      var u = line.match(UID_LINE);
+      if (u) {
+        if (!uid) uid = (u[1].replace(/[^0-9a-fA-F]/g, "").match(/../g) || []).join(":").toUpperCase();
         return;
       }
-      // drop a leading block label: "05:", "Block 5 -", "page 0c |"
-      body = body.replace(/^\s*(?:block|blk|page|addr)\s*[0-9a-fA-F]{1,3}\s*[:.|-]?\s+/i, "")
-                 .replace(/^\s*[0-9a-fA-F]{1,3}\s*[:.|-]\s+/, "");
-      var tokens = body.split(/[\s,|]+/);
-      var lineBytes = [], started = false;
-      for (var i = 0; i < tokens.length; i++) {
-        var t = tokens[i].replace(/[:.-]/g, "");
-        if (!t) continue;
-        if (!isHex(t) || t.length % 2 !== 0) {
-          if (started) break; // the ASCII column starts here
-          continue;           // still in a label like "Data:"
-        }
-        started = true;
-        for (var j = 0; j < t.length; j += 2) lineBytes.push(parseInt(t.substr(j, 2), 16));
+      var label = null, body = line;
+      var m = line.match(BLOCK_LABEL);
+      if (m) {
+        var prefixed = m[1] || m[3] || m[5];
+        label = { raw: m[2] || m[4] || m[6], hex: !!prefixed };
+        if (label.hex || /[a-fA-F]/.test(label.raw)) anyHexLabel = true;
+        body = line.slice(m[0].length);
       }
-      // a real dump line carries at least one 4-byte block; "AFI: 00" does not
-      if (lineBytes.length >= 4) bytes = bytes.concat(lineBytes);
+      var bytes = lineBytes(body);
+      // "00 48 50 4F 4D": a bare block number in front of the four bytes
+      if (!label && bytes.length % 4 === 1 && bytes.length >= 5) {
+        var first = body.trim().split(/\s+/)[0];
+        label = { raw: first, hex: false };
+        bytes = bytes.slice(1);
+      }
+      if (bytes.length < 4) return; // "AFI: 00" and similar chip info lines
+      rows.push({ label: label, bytes: bytes });
     });
-    return { bytes: bytes, uid: uid };
+
+    var blocks = [], cursor = 0;
+    rows.forEach(function (row) {
+      var index = cursor;
+      if (row.label) {
+        index = parseInt(row.label.raw, (row.label.hex || anyHexLabel) ? 16 : 10);
+      }
+      for (var k = 0; k + 4 <= row.bytes.length; k += 4) {
+        blocks[index + k / 4] = row.bytes.slice(k, k + 4);
+      }
+      cursor = index + Math.floor(row.bytes.length / 4);
+    });
+    return { blocks: blocks, uid: uid };
   }
 
   function ascii(bytes) {
@@ -451,33 +522,38 @@
     }).join("");
   }
 
-  function fieldOf(offset) {
-    if (offset < 4) return "type";
-    if (offset < 12) return "date";
-    if (offset < 32) return "batch";
-    if (offset < 64) return "sig";
-    return "none";
+  function hex(bytes) {
+    return bytes.map(function (b) { return (b < 16 ? "0" : "") + b.toString(16).toUpperCase(); }).join(" ");
   }
 
-  var FIELD_NAME = { type: "ชนิด", date: "วันหมดอายุ", batch: "BATCH", sig: "ลายเซ็น", none: "—" };
-
-  function findPayloadStart(bytes) {
-    for (var start = 0; start + 32 <= bytes.length; start += 4) {
-      if (PRODUCTS[ascii(bytes.slice(start, start + 4))]) return start;
-    }
-    return bytes.length >= 32 ? 0 : -1;
+  function hasRun(blocks, start) {
+    for (var i = start; i < start + PAYLOAD_BLOCKS; i++) if (!blocks[i]) return false;
+    return true;
   }
 
-  function decode(bytes) {
-    var start = findPayloadStart(bytes);
-    if (start < 0) {
-      return { error: "อ่านได้เพียง " + bytes.length + " ไบต์ ต้องมีอย่างน้อย 32 ไบต์ (block 0 ถึง 7)" };
+  function runBytes(blocks, start) {
+    var out = [];
+    for (var i = start; i < start + PAYLOAD_BLOCKS; i++) out = out.concat(blocks[i]);
+    return out;
+  }
+
+  function findPayloadStart(blocks) {
+    for (var s = 0; s < blocks.length; s++) {
+      if (hasRun(blocks, s) && PRODUCTS[ascii(blocks[s])]) return s;
     }
-    var text = ascii(bytes.slice(start, start + 32));
+    return hasRun(blocks, 0) ? 0 : -1;
+  }
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function decode(blocks) {
+    var start = findPayloadStart(blocks);
+    if (start < 0) return null;
+    var text = ascii(runBytes(blocks, start));
     var code = text.slice(0, 4);
     var product = PRODUCTS[code];
     if (!product) {
-      return { error: "Not valid tag — รหัสชนิดคือ “" + code + "” ซึ่งไม่ใช่ HPOM, HPO2, LFMM หรือ SRVC", start: start };
+      return { start: start, error: "Not valid tag — รหัสชนิดคือ “" + code + "” ซึ่งไม่ใช่ HPOM, HPO2, LFMM หรือ SRVC" };
     }
     var year = parseInt(text.slice(4, 8), 10);
     var month = parseInt(text.slice(8, 10), 10);
@@ -487,10 +563,7 @@
     else if (!(month > 0 && month < 13)) dateError = "Invalid month";
     else if (!(day > 0 && day < 32)) dateError = "Invalid day";
 
-    var batchRaw = text.slice(12, 32);
-    var batch = batchRaw.replace(/^0+/, "");
-    if (!batch) batch = "0";
-
+    var batch = text.slice(12, 32).replace(/^0+/, "") || "0";
     return {
       start: start,
       code: code,
@@ -501,8 +574,6 @@
       batch: batch
     };
   }
-
-  function pad(n) { return (n < 10 ? "0" : "") + n; }
 
   function daysUntil(date) {
     var now = new Date();
@@ -527,12 +598,38 @@
     return n;
   }
 
-  function renderResult(res, uid) {
+  function renderProgress(blocks) {
+    blockCells.textContent = "";
+    var missing = [];
+    for (var i = 0; i < PAYLOAD_BLOCKS; i++) {
+      var have = !!blocks[i];
+      if (!have) missing.push(pad(i));
+      blockCells.appendChild(el("div", "blk" + (have ? " have" : ""), pad(i)));
+    }
+    progressNote.textContent = "";
+    var got = PAYLOAD_BLOCKS - missing.length;
+    var strong = el("strong", null, "ได้แล้ว " + got + " จาก " + PAYLOAD_BLOCKS + " block");
+    progressNote.appendChild(strong);
+    progressNote.appendChild(document.createTextNode(
+      missing.length ? " · ยังขาด block " + missing.join(", ") : " · ครบแล้ว"));
+    return missing;
+  }
+
+  function renderResult(res, uid, missing) {
     output.textContent = "";
+    if (!res) {
+      var wait = el("section", "panel");
+      wait.appendChild(el("div", "panel-title", "ผลการถอดรหัส"));
+      wait.appendChild(el("div", null, missing.length === PAYLOAD_BLOCKS
+        ? "วาง memory dump ด้านบน แล้วผลจะขึ้นที่นี่ทันที"
+        : "ยังขาด block " + missing.join(", ") + " — คัดลอกจากแอปแล้วกด วางต่อท้าย"));
+      output.appendChild(wait);
+      return;
+    }
     if (res.error) {
       var err = el("div", "panel error-card");
       err.appendChild(el("div", null, res.error));
-      err.appendChild(el("div", "hint", "ตรวจว่าคัดลอกเนื้อหาหน่วยความจำมาครบ ไม่ใช่เฉพาะบรรทัด UID หรือข้อมูลชิป"));
+      err.appendChild(el("div", "hint", "ตรวจว่าวาง block 00 ถึง 07 ของแท็กนี้ครบ และเลข block ตรงกับในแอป"));
       output.appendChild(err);
       return;
     }
@@ -556,58 +653,94 @@
 
     var notes = [];
     if (uid) notes.push("UID " + uid);
-    if (res.start > 0) notes.push("ข้อมูลเริ่มที่ไบต์ที่ " + res.start + " ของ dump (block " + (res.start / 4) + ")");
+    if (res.start > 0) notes.push("ข้อมูลเริ่มที่ block " + pad(res.start));
     if (notes.length) card.appendChild(el("div", "note", notes.join(" · ")));
     output.appendChild(card);
   }
 
-  function renderMap(bytes, start) {
+  function fieldOf(offset) {
+    if (offset < 0) return "none";
+    if (offset < 4) return "type";
+    if (offset < 12) return "date";
+    if (offset < 32) return "batch";
+    if (offset < 64) return "sig";
+    return "none";
+  }
+
+  var FIELD_NAME = { type: "ชนิด", date: "วันหมดอายุ", batch: "BATCH", sig: "ลายเซ็น", none: "—" };
+
+  function renderMap(blocks, start) {
     mapBody.textContent = "";
-    var offsetBase = start || 0;
-    for (var i = 0; i < bytes.length; i += 4) {
-      var chunk = bytes.slice(i, i + 4);
-      if (!chunk.length) break;
-      var rel = i - offsetBase;
-      var field = rel >= 0 ? fieldOf(rel) : "none";
+    var last = Math.max(blocks.length, blocks.length ? PAYLOAD_BLOCKS : 0);
+    for (var i = 0; i < last; i++) {
+      var chunk = blocks[i];
+      var field = fieldOf((i - start) * 4);
       var tr = el("tr");
+      if (!chunk) {
+        tr.className = "dim";
+        tr.appendChild(el("td", "idx", pad(i)));
+        tr.appendChild(el("td", "seg-none", "·· ·· ·· ··"));
+        tr.appendChild(el("td", "seg-none", ""));
+        tr.appendChild(el("td", "seg-none", "ยังไม่ได้วาง"));
+        mapBody.appendChild(tr);
+        continue;
+      }
       var erased = chunk.every(function (b) { return b === 0; });
       if (erased || field === "none") tr.className = "dim";
-      tr.appendChild(el("td", "idx", pad(i / 4)));
-      tr.appendChild(el("td", "seg-" + field, chunk.map(function (b) {
-        return (b < 16 ? "0" : "") + b.toString(16).toUpperCase();
-      }).join(" ")));
+      tr.appendChild(el("td", "idx", pad(i)));
+      tr.appendChild(el("td", "seg-" + field, hex(chunk)));
       tr.appendChild(el("td", "seg-" + field, ascii(chunk)));
       tr.appendChild(el("td", "seg-none", erased ? "ว่าง" : FIELD_NAME[field]));
       mapBody.appendChild(tr);
     }
     if (!mapBody.children.length) {
-      var tr2 = el("tr");
+      var row = el("tr");
       var td = el("td", "seg-none", "ยังไม่มีข้อมูล");
       td.colSpan = 4;
-      tr2.appendChild(td);
-      mapBody.appendChild(tr2);
+      row.appendChild(td);
+      mapBody.appendChild(row);
     }
   }
 
   function run() {
     var parsed = parseDump(input.value);
-    byteCount.textContent = parsed.bytes.length ? parsed.bytes.length + " ไบต์ · " + Math.ceil(parsed.bytes.length / 4) + " block" : "—";
-    if (!parsed.bytes.length) {
-      output.textContent = "";
-      var empty = el("section", "panel");
-      empty.appendChild(el("div", "panel-title", "ผลการถอดรหัส"));
-      empty.appendChild(el("div", null, "วาง memory dump ด้านบน แล้วผลจะขึ้นที่นี่ทันที"));
-      output.appendChild(empty);
-      renderMap([], 0);
-      try { localStorage.removeItem("matachana-dump-v2"); } catch (e) {}
-      return;
-    }
-    var res = decode(parsed.bytes);
-    renderResult(res, parsed.uid);
-    renderMap(parsed.bytes, res.start || 0);
-    try { localStorage.setItem("matachana-dump-v2", input.value); } catch (e) {}
+    var count = parsed.blocks.filter(Boolean).length;
+    byteCount.textContent = count ? count + " block · " + count * 4 + " ไบต์" : "—";
+    var missing = renderProgress(parsed.blocks);
+    var res = decode(parsed.blocks);
+    renderResult(res, parsed.uid, missing);
+    renderMap(parsed.blocks, res ? res.start : 0);
+    try {
+      if (input.value.trim()) localStorage.setItem(STORAGE_KEY, input.value);
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
   }
 
+  function readClipboard(then) {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      alert("เบราว์เซอร์นี้ไม่ให้อ่านคลิปบอร์ด กดค้างในช่องด้านบนแล้วเลือกวางแทน");
+      return;
+    }
+    navigator.clipboard.readText().then(then, function () {
+      alert("อ่านคลิปบอร์ดไม่สำเร็จ กดค้างในช่องด้านบนแล้วเลือกวางแทน");
+    });
+  }
+
+  document.getElementById("btnAppend").addEventListener("click", function () {
+    readClipboard(function (t) {
+      var current = input.value === SAMPLE ? "" : input.value;
+      if (current && !/\n$/.test(current)) current += "\n";
+      input.value = current + t.trim() + "\n";
+      input.scrollTop = input.scrollHeight;
+      run();
+    });
+  });
+  document.getElementById("btnPaste").addEventListener("click", function () {
+    readClipboard(function (t) {
+      input.value = t;
+      run();
+    });
+  });
   document.getElementById("btnSample").addEventListener("click", function () {
     input.value = SAMPLE;
     run();
@@ -617,22 +750,10 @@
     run();
     input.focus();
   });
-  document.getElementById("btnPaste").addEventListener("click", function () {
-    if (!navigator.clipboard || !navigator.clipboard.readText) {
-      alert("เบราว์เซอร์นี้ไม่อนุญาตให้อ่านคลิปบอร์ด ใช้การวางด้วยมือแทน");
-      return;
-    }
-    navigator.clipboard.readText().then(function (t) {
-      input.value = t;
-      run();
-    }, function () {
-      alert("อ่านคลิปบอร์ดไม่สำเร็จ ใช้การวางด้วยมือแทน");
-    });
-  });
   input.addEventListener("input", run);
 
   var saved = null;
-  try { saved = localStorage.getItem("matachana-dump-v2"); } catch (e) {}
+  try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
   input.value = saved || SAMPLE;
   run();
 })();
